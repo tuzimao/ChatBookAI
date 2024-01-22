@@ -38,11 +38,11 @@
 
   /*
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  const OPENAI_Temperature = 0.9
+  */
   const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
   const PINECONE_ENVIRONMENT = process.env.PINECONE_ENVIRONMENT;
   const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME;
-  const OPENAI_Temperature = 0.9
-  */
 
   const CONDENSE_TEMPLATE_INIT = `Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
 
@@ -81,7 +81,7 @@
   //Only for Dev
   await initChatBookDb({"NodeStorageDirectory": process.env.NodeStorageDirectory});
   
-  async function initChatBookDb(ChatBookSetting) {    
+  async function initChatBookDb(ChatBookSetting) {
     DataDir = ChatBookSetting && ChatBookSetting.NodeStorageDirectory ? ChatBookSetting.NodeStorageDirectory : "D:\\";
     db = new sqlite3Verbose.Database(DataDir + '/ChatBook.db', { 
       encoding: 'utf8' 
@@ -97,9 +97,9 @@
         db.run(`insert or ignore into setting (name, content, type) values('OPENAI_API_KEY','','openaisetting');`);
         db.run(`insert or ignore into setting (name, content, type) values('Temperature','0.1','openaisetting');`);
         db.run(`insert or ignore into setting (name, content, type) values('ModelName','gpt-3.5-turbo','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('PINECONE_API_KEY','','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('PINECONE_ENVIRONMENT','gcp-starter','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('PINECONE_INDEX_NAME','','openaisetting');`);
+        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_API_KEY','','openaisetting');`);
+        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_ENVIRONMENT','gcp-starter','openaisetting');`);
+        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_INDEX_NAME','','openaisetting');`);
         db.run(`insert or ignore into setting (name, content, type) values('CONDENSE_TEMPLATE',?,'TEMPLATE_1');`, [CONDENSE_TEMPLATE_INIT]);
         db.run(`insert or ignore into setting (name, content, type) values('QA_TEMPLATE',?,'TEMPLATE_1');`, [QA_TEMPLATE_INIT]);
         db.run(`
@@ -146,13 +146,14 @@
     });
     enableDir(DataDir + '/uploadfiles/');
     enableDir(DataDir + '/parsedfiles/');
+    //Reset OPENAI URL
+    process.env.OPENAI_BASE_URL = "https://openkey.cloud/v1"
+    parseFiles();
   }
 
   async function initChatBookOpenAI() {
     getOpenAISettingData = await getOpenAISetting();
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
-    const PINECONE_API_KEY = getOpenAISettingData.PINECONE_API_KEY;
-    const PINECONE_ENVIRONMENT = getOpenAISettingData.PINECONE_ENVIRONMENT;
     const OPENAI_Temperature = getOpenAISettingData.Temperature;
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
       ChatOpenAIModel = new ChatOpenAI({ openAIApiKey: OPENAI_API_KEY, temperature: Number(OPENAI_Temperature) });    
@@ -185,10 +186,10 @@
       insertSetting.run('OPENAI_API_KEY', Params.OPENAI_API_KEY, 'openaisetting');
       insertSetting.run('Temperature', Params.Temperature, 'openaisetting');
       insertSetting.run('ModelName', Params.ModelName, 'openaisetting');
-      insertSetting.run('PINECONE_API_KEY', Params.PINECONE_API_KEY, 'openaisetting');
-      insertSetting.run('PINECONE_ENVIRONMENT', Params.PINECONE_ENVIRONMENT, 'openaisetting');
-      insertSetting.run('PINECONE_INDEX_NAME', Params.PINECONE_INDEX_NAME, 'openaisetting');
-      insertSetting.run('PINECONE_NAME_SPACE', Params.PINECONE_NAME_SPACE, 'openaisetting');
+      //insertSetting.run('PINECONE_API_KEY', Params.PINECONE_API_KEY, 'openaisetting');
+      //insertSetting.run('PINECONE_ENVIRONMENT', Params.PINECONE_ENVIRONMENT, 'openaisetting');
+      //insertSetting.run('PINECONE_INDEX_NAME', Params.PINECONE_INDEX_NAME, 'openaisetting');
+      //insertSetting.run('PINECONE_NAME_SPACE', Params.PINECONE_NAME_SPACE, 'openaisetting');
       insertSetting.finalize();
     }
     catch (error) {
@@ -476,7 +477,7 @@
           const index = pinecone.Index(getOpenAISettingData.PINECONE_INDEX_NAME);  
           
           const PINECONE_NAME_SPACE_USE = getOpenAISettingData.PINECONE_NAME_SPACE + '_' + String(KnowledgeItemId)
-          log("parseFiles PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
+          log("parseFiles getOpenAISettingData", getOpenAISettingData, index)
           await PineconeStore.fromDocuments(SplitterDocs, embeddings, {
             pineconeIndex: index,
             namespace: PINECONE_NAME_SPACE_USE,
@@ -491,6 +492,7 @@
               ParsedFiles.push(fileName);
             }
           });
+          /*
           const UpdateFileParseStatus = db.prepare('update files set status = ? where newName = ?');
           ParsedFiles.map((Item) => {
             UpdateFileParseStatus.run(1, Item);
@@ -505,6 +507,7 @@
           });
           UpdateFileParseStatus.finalize();
           log('parseFiles change the files status finished', ParsedFiles);
+          */
         }
         else {
           log('parseFiles No files need to parse');
