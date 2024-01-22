@@ -46,8 +46,9 @@ expressApp.post('/setopenai', async (req, res) => {
   res.json(OpenAISetting).end(); 
 });
 
-expressApp.get('/getopenai', async (req, res) => {
-  const OpenAISetting = await syncing.getOpenAISetting();
+expressApp.get('/getopenai/:knowledgeId', async (req, res) => {
+  const { knowledgeId} = req.params;
+  const OpenAISetting = await syncing.getOpenAISetting(knowledgeId);
   res.json(OpenAISetting).end(); 
 });
 

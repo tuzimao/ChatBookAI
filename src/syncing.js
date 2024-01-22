@@ -77,64 +77,74 @@
   let ChatOpenAIModel = null
   let pinecone = null
   let getOpenAISettingData = null
+  let knowledgeId = 0
+  let userId = 1
 
   //Only for Dev
   await initChatBookDb({"NodeStorageDirectory": process.env.NodeStorageDirectory});
   
   async function initChatBookDb(ChatBookSetting) {
     DataDir = ChatBookSetting && ChatBookSetting.NodeStorageDirectory ? ChatBookSetting.NodeStorageDirectory : "D:\\";
+    enableDir(DataDir);
     db = new sqlite3Verbose.Database(DataDir + '/ChatBook.db', { 
       encoding: 'utf8' 
     });
     db.serialize(() => {
         db.run(`
             CREATE TABLE IF NOT EXISTS setting (
-                name TEXT PRIMARY KEY not null,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT KEY not null,
                 content TEXT not null,
-                type TEXT not null
+                type TEXT not null,
+                knowledgeId INTEGER not null,
+                userId INTEGER not null,
+                UNIQUE(name, userId, knowledgeId)
             );
         `);
-        db.run(`insert or ignore into setting (name, content, type) values('OPENAI_API_KEY','','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('Temperature','0.1','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('ModelName','gpt-3.5-turbo','openaisetting');`);
-        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_API_KEY','','openaisetting');`);
-        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_ENVIRONMENT','gcp-starter','openaisetting');`);
-        //db.run(`insert or ignore into setting (name, content, type) values('PINECONE_INDEX_NAME','','openaisetting');`);
-        db.run(`insert or ignore into setting (name, content, type) values('CONDENSE_TEMPLATE',?,'TEMPLATE_1');`, [CONDENSE_TEMPLATE_INIT]);
-        db.run(`insert or ignore into setting (name, content, type) values('QA_TEMPLATE',?,'TEMPLATE_1');`, [QA_TEMPLATE_INIT]);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('OPENAI_API_BASE','','openaisetting',1,1);`);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('OPENAI_API_KEY','','openaisetting',1,1);`);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('Temperature','0.1','openaisetting',1,1);`);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('ModelName','gpt-3.5-turbo','openaisetting',1,1);`);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('CONDENSE_TEMPLATE',?,'TEMPLATE_1',1,1);`, [CONDENSE_TEMPLATE_INIT]);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('QA_TEMPLATE',?,'TEMPLATE_1',1,1);`, [QA_TEMPLATE_INIT]);
         db.run(`
             CREATE TABLE IF NOT EXISTS files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                knowledge INTEGER not null,
+                knowledgeId INTEGER not null,
                 suffixName TEXT not null,
                 newName TEXT UNIQUE not null,
                 originalName TEXT not null,
                 hash TEXT not null,
                 status INTEGER not null default 0,
                 summary TEXT not null default '',
-                timestamp INTEGER not null default 0
+                timestamp INTEGER not null default 0,
+                userId INTEGER not null
             );
         `);
         db.run(`
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 datetime TEXT not null,
-                content TEXT not null
+                content TEXT not null,
+                knowledgeId INTEGER not null,
+                userId INTEGER not null
             );
         `);
         db.run(`
             CREATE TABLE IF NOT EXISTS knowledge (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE not null,
+                name TEXT not null,
                 summary TEXT not null,
-                timestamp INTEGER not null default 0
+                timestamp INTEGER not null default 0,
+                userId INTEGER not null,
+                UNIQUE(name, userId)
             );
         `);
-        db.run(`insert or ignore into knowledge (id, name, summary, timestamp) values(1, 'Default','Default','`+Date.now()+`');`);
+        db.run(`insert or ignore into knowledge (id, name, summary, timestamp, userId) values(1, 'Default','Default','`+Date.now()+`', 1);`);
         db.run(`
             CREATE TABLE IF NOT EXISTS chatlog (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                knowledge INTEGER not null default 0,
+                knowledgeId INTEGER not null default 0,
                 send TEXT  not null,
                 received TEXT not null,
                 userId INTEGER not null default 0,
@@ -147,23 +157,29 @@
     enableDir(DataDir + '/uploadfiles/');
     enableDir(DataDir + '/parsedfiles/');
     //Reset OPENAI URL
-    process.env.OPENAI_BASE_URL = "https://openkey.cloud/v1"
     parseFiles();
   }
 
   async function initChatBookOpenAI() {
-    getOpenAISettingData = await getOpenAISetting();
+    getOpenAISettingData = await getOpenAISetting(knowledgeId);
+    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
     const OPENAI_Temperature = getOpenAISettingData.Temperature;
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
+      if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
+        process.env.OPENAI_BASE_URL = OPENAI_API_BASE
+        console.log("OPENAI_API_BASE", OPENAI_API_BASE)
+      }
       ChatOpenAIModel = new ChatOpenAI({ openAIApiKey: OPENAI_API_KEY, temperature: Number(OPENAI_Temperature) });    
       pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
     }
   }
 
-  async function getOpenAISetting() {
+  async function getOpenAISetting(knowledgeId) {
+    const knowledgeIdFilter = Number(knowledgeId)
+    const userIdFilter = Number(userId)
     const SettingRS = await new Promise((resolve, reject) => {
-            db.all("SELECT name,content from setting where type='openaisetting'", (err, result) => {
+            db.all("SELECT name,content from setting where type='openaisetting' and knowledgeId='"+knowledgeIdFilter+"' and userId='"+userIdFilter+"'", (err, result) => {
               if (err) {
                 reject(err);
               } else {
@@ -181,15 +197,14 @@
   }
 
   async function setOpenAISetting(Params) {
-    try{
-      const insertSetting = db.prepare('INSERT OR REPLACE INTO setting (name, content, type) VALUES (?, ?, ?)');
-      insertSetting.run('OPENAI_API_KEY', Params.OPENAI_API_KEY, 'openaisetting');
-      insertSetting.run('Temperature', Params.Temperature, 'openaisetting');
-      insertSetting.run('ModelName', Params.ModelName, 'openaisetting');
-      //insertSetting.run('PINECONE_API_KEY', Params.PINECONE_API_KEY, 'openaisetting');
-      //insertSetting.run('PINECONE_ENVIRONMENT', Params.PINECONE_ENVIRONMENT, 'openaisetting');
-      //insertSetting.run('PINECONE_INDEX_NAME', Params.PINECONE_INDEX_NAME, 'openaisetting');
-      //insertSetting.run('PINECONE_NAME_SPACE', Params.PINECONE_NAME_SPACE, 'openaisetting');
+    const knowledgeIdFilter = Number(Params.knowledgeId)
+    const userIdFilter = Number(userId)
+    try {
+      const insertSetting = db.prepare('INSERT OR REPLACE INTO setting (name, content, type, knowledgeId, userId) VALUES (?, ?, ?, ?, ?)');
+      insertSetting.run('OPENAI_API_BASE', Params.OPENAI_API_BASE, 'openaisetting', knowledgeIdFilter, userIdFilter);
+      insertSetting.run('OPENAI_API_KEY', Params.OPENAI_API_KEY, 'openaisetting', knowledgeIdFilter, userIdFilter);
+      insertSetting.run('Temperature', Params.Temperature, 'openaisetting', knowledgeIdFilter, userIdFilter);
+      insertSetting.run('ModelName', Params.ModelName, 'openaisetting', knowledgeIdFilter, userIdFilter);
       insertSetting.finalize();
     }
     catch (error) {
@@ -199,9 +214,11 @@
   }
 
   async function getTemplate(knowledgeId) {
+    const knowledgeIdFilter = Number(knowledgeId)
+    const userIdFilter = Number(userId)
     const SettingRS = await new Promise((resolve, reject) => {
-            const Templatename = "TEMPLATE_" + String(Number(knowledgeId))
-            db.all("SELECT name,content from setting where type='"+Templatename+"'", (err, result) => {
+            const Templatename = "TEMPLATE"
+            db.all("SELECT name,content from setting where type='"+Templatename+"' and knowledgeId='"+knowledgeIdFilter+"' and userId='"+userIdFilter+"'", (err, result) => {
               if (err) {
                 reject(err);
               } else {
@@ -212,7 +229,7 @@
     const Template = {}
     if(SettingRS)  {
       SettingRS.map((Item)=>{
-        Template[Item.name.replace("_" + String(Number(knowledgeId)),"")] = Item.content
+        Template[Item.name.replace("_" + String(knowledgeIdFilter),"")] = Item.content
       })
     }
     return Template
@@ -220,10 +237,12 @@
 
   async function setTemplate(Params) {
     try{
-      const Templatename = "TEMPLATE_" + String(Number(Params.knowledgeId))
-      const insertSetting = db.prepare('INSERT OR REPLACE INTO setting (name, content, type) VALUES (?, ?, ?)');
-      insertSetting.run('CONDENSE_TEMPLATE_' + String(Number(Params.knowledgeId)), Params.CONDENSE_TEMPLATE, Templatename);
-      insertSetting.run('QA_TEMPLATE_' + String(Number(Params.knowledgeId)), Params.QA_TEMPLATE, Templatename);
+      const knowledgeIdFilter = Number(Params.knowledgeId)
+      const userIdFilter = Number(userId)
+      const Templatename = "TEMPLATE"
+      const insertSetting = db.prepare('INSERT OR REPLACE INTO setting (name, content, type, knowledgeId, userId) VALUES (?, ?, ?, ?, ?)');
+      insertSetting.run('CONDENSE_TEMPLATE', Params.CONDENSE_TEMPLATE, Templatename, knowledgeIdFilter, userIdFilter);
+      insertSetting.run('QA_TEMPLATE', Params.QA_TEMPLATE, Templatename, knowledgeIdFilter, userIdFilter);
       insertSetting.finalize();
     }
     catch (error) {
@@ -234,8 +253,9 @@
 
   async function addKnowledge(Params) {
     try{
-      const insertSetting = db.prepare('INSERT OR REPLACE INTO knowledge (name, summary, timestamp) VALUES (?, ?, ?)');
-      insertSetting.run(Params.name, Params.summary, Date.now());
+      const userIdFilter = Number(userId)
+      const insertSetting = db.prepare('INSERT OR REPLACE INTO knowledge (name, summary, timestamp, userId) VALUES (?, ?, ?, ?)');
+      insertSetting.run(Params.name, Params.summary, Date.now(), userIdFilter);
       insertSetting.finalize();
     }
     catch (error) {
@@ -274,7 +294,7 @@
     return upload
   }
 
-  async function uploadfilesInsertIntoDb(files, knowledge) {
+  async function uploadfilesInsertIntoDb(files, knowledgeId) {
     //const originalName = Buffer.from(files[0].originalname, 'hex').toString('utf8');
     //log("originalName", files[0].originalname)
     const filesInfo = files.map(file => {
@@ -286,13 +306,14 @@
         hash: fileHash,
       };
     });
-    const insertFiles = db.prepare('INSERT OR IGNORE INTO files (knowledge, suffixName, newName, originalName, hash, timestamp) VALUES (?,?,?,?,?,?)');
+    const insertFiles = db.prepare('INSERT OR IGNORE INTO files (knowledgeId, suffixName, newName, originalName, hash, timestamp, userId) VALUES (?,?,?,?,?,?,?)');
     filesInfo.map((Item)=>{
       const suffixName = path.extname(Item.originalName).toLowerCase();
-      insertFiles.run(knowledge, suffixName, Item.newName, Item.originalName, Item.hash, Date.now());
+      insertFiles.run(knowledgeId, suffixName, Item.newName, Item.originalName, Item.hash, Date.now(), Number(userId));
       // Move Files To KnowledgeId Dir
-      enableDir(DataDir + '/uploadfiles/' + String(knowledge) )
-      fs.rename(DataDir + '/uploadfiles/' + Item.newName, DataDir + '/uploadfiles/' + String(knowledge) + '/' + Item.newName, (err) => {
+      enableDir(DataDir + '/uploadfiles/' + String(userId) )
+      enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(knowledgeId))
+      fs.rename(DataDir + '/uploadfiles/' + Item.newName, DataDir + '/uploadfiles/'  + String(userId) + '/' + String(knowledgeId) + '/' + Item.newName, (err) => {
         if (err) {
           log('Error moving file:', err, Item);
         } else {
@@ -398,7 +419,7 @@
   
       const sourceDocuments = await documentPromise;
 
-      const insertChatLog = db.prepare('INSERT OR REPLACE INTO chatlog (knowledge, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
+      const insertChatLog = db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
       insertChatLog.run(Number(KnowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
       insertChatLog.finalize();
 
@@ -449,8 +470,9 @@
       
       await Promise.all(getKnowledgePageData.map(async (KnowledgeItem)=>{
         const KnowledgeItemId = KnowledgeItem.id
-        enableDir(DataDir + '/uploadfiles/' + String(KnowledgeItemId))
-        const directoryLoader = new DirectoryLoader(DataDir + '/uploadfiles/' + String(KnowledgeItemId) + '/', {
+        enableDir(DataDir + '/uploadfiles/' + String(userId))
+        enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId))
+        const directoryLoader = new DirectoryLoader(DataDir + '/uploadfiles/'  + String(userId) + '/' + String(KnowledgeItemId) + '/', {
           '.pdf': (path) => new PDFLoader(path),
           '.docx': (path) => new DocxLoader(path),
           '.json': (path) => new JSONLoader(path, '/texts'),
@@ -492,12 +514,12 @@
               ParsedFiles.push(fileName);
             }
           });
-          /*
-          const UpdateFileParseStatus = db.prepare('update files set status = ? where newName = ?');
+          
+          const UpdateFileParseStatus = db.prepare('update files set status = ? where newName = ? and knowledge = ? and userId = ?');
           ParsedFiles.map((Item) => {
-            UpdateFileParseStatus.run(1, Item);
+            UpdateFileParseStatus.run(1, Item, KnowledgeItemId, userId);
             const destinationFilePath = path.join(DataDir + '/parsedfiles/', Item);
-            fs.rename(DataDir + '/uploadfiles/' + String(KnowledgeItemId) + '/' + Item, destinationFilePath, (err) => {
+            fs.rename(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId) + '/' + Item, destinationFilePath, (err) => {
               if (err) {
                 log('parseFiles Error moving file:', err, Item);
               } else {
@@ -507,7 +529,7 @@
           });
           UpdateFileParseStatus.finalize();
           log('parseFiles change the files status finished', ParsedFiles);
-          */
+          
         }
         else {
           log('parseFiles No files need to parse');
@@ -623,7 +645,7 @@
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);
     const From = pageidFiler * pagesizeFiler;
     const RecordsTotal = await new Promise((resolve, reject) => {
-      db.get("SELECT COUNT(*) AS NUM from files where knowledge = '"+KnowledgeIdFiler+"'", (err, result) => {
+      db.get("SELECT COUNT(*) AS NUM from files where knowledgeId = '"+KnowledgeIdFiler+"'", (err, result) => {
         if (err) {
           reject(err);
         } else {
@@ -632,7 +654,7 @@
       });
     });
     const RecordsAll = await new Promise((resolve, reject) => {
-                            db.all("SELECT * from files where knowledge = '"+KnowledgeIdFiler+"' order by status desc, timestamp desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
+                            db.all("SELECT * from files where knowledgeId = '"+KnowledgeIdFiler+"' order by status desc, timestamp desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
                               if (err) {
                                 reject(err);
                               } else {
@@ -675,7 +697,7 @@
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);
     const From = pageidFiler * pagesizeFiler;
     const RecordsTotal = await new Promise((resolve, reject) => {
-      db.get("SELECT COUNT(*) AS NUM from chatlog where knowledge = '"+KnowledgeIdFiler+"' and userId = '"+userIdFiler+"'", (err, result) => {
+      db.get("SELECT COUNT(*) AS NUM from chatlog where knowledgeId = '"+KnowledgeIdFiler+"' and userId = '"+userIdFiler+"'", (err, result) => {
         if (err) {
           reject(err);
         } else {
@@ -684,7 +706,7 @@
       });
     });
     const RecordsAll = await new Promise((resolve, reject) => {
-                            db.all("SELECT * from chatlog where knowledge = '"+KnowledgeIdFiler+"' and userId = '"+userIdFiler+"' order by timestamp desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
+                            db.all("SELECT * from chatlog where knowledgeId = '"+KnowledgeIdFiler+"' and userId = '"+userIdFiler+"' order by timestamp desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
                               if (err) {
                                 reject(err);
                               } else {
@@ -753,11 +775,12 @@
   }
 
   async function getKnowledgePage(pageid, pagesize) {
+    const userIdFiler = Number(userId) < 0 ? 0 : Number(userId);
     const pageidFiler = Number(pageid) < 0 ? 0 : Number(pageid);
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);
     const From = pageidFiler * pagesizeFiler;
     const RecordsTotal = await new Promise((resolve, reject) => {
-      db.get("SELECT COUNT(*) AS NUM from knowledge", (err, result) => {
+      db.get("SELECT COUNT(*) AS NUM from knowledge where userId='"+userIdFiler+"'", (err, result) => {
         if (err) {
           reject(err);
         } else {
@@ -766,7 +789,7 @@
       });
     });
     const RecordsAll = await new Promise((resolve, reject) => {
-                            db.all("SELECT * from knowledge where 1=1 order by id desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
+                            db.all("SELECT * from knowledge where userId='"+userIdFiler+"' order by id desc limit "+ Number(pagesize) +" offset "+ From +"", (err, result) => {
                               if (err) {
                                 reject(err);
                               } else {
@@ -781,7 +804,7 @@
             return Item
           })
       );
-      //log("getKnowledgePage", RSDATA)
+      log("getKnowledgePage", RSDATA)
     }
     const RS = {};
     RS['allpages'] = Math.ceil(RecordsTotal/pagesizeFiler);
@@ -820,8 +843,8 @@
     const currentDate = new Date();
     const currentDateTime = currentDate.toLocaleString();
     const content = JSON.stringify(Action1) +" "+ JSON.stringify(Action2) +" "+ JSON.stringify(Action3) +" "+ JSON.stringify(Action4) +" "+ JSON.stringify(Action5) +" "+ JSON.stringify(Action6) +" "+ JSON.stringify(Action7) +" "+ JSON.stringify(Action8) +" "+ JSON.stringify(Action9) +" "+ JSON.stringify(Action10);
-    const insertStat = db.prepare('INSERT OR REPLACE INTO logs (datetime,content) VALUES (?,?)');
-    insertStat.run(currentDateTime, content);
+    const insertStat = db.prepare('INSERT OR REPLACE INTO logs (datetime, content, knowledgeId, userId) VALUES (? ,? ,? ,?)');
+    insertStat.run(currentDateTime, content, knowledgeId, userId);
     insertStat.finalize();
     console.log(Action1, Action2, Action3, Action4, Action5, Action6, Action7, Action8, Action9, Action10)
   }
