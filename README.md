@@ -67,3 +67,6 @@ npm run express
     1 LLM:  Langchain, Pinecone, OPENAI, 后续会持续集成其它模型
     2 后端: Electron, Express
     3 前端: React, NEXT, MUI
+
+## 微信交流群组
+    ![微信交流群组](./public/wechatqrcode.png)
