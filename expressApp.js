@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import agentRoutes from './src/router/agent.js';
+import cron from 'node-cron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,6 +17,12 @@ const expressApp = express();
 
 expressApp.use(cors());
 expressApp.use(bodyParser.json());
+
+cron.schedule('*/3 * * * *', () => {
+  console.log('Task Begin !');
+  syncing.parseFiles();
+  console.log('Task End !');
+});
 
 expressApp.get('/debug', async (req, res) => {
   await syncing.debug();
