@@ -33,7 +33,7 @@
 
   //.ENV
   import dotenv from 'dotenv';
-  import { exit } from 'process'
+  import { exit } from 'process';
   dotenv.config();
 
   /*
@@ -43,6 +43,7 @@
   const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
   const PINECONE_ENVIRONMENT = process.env.PINECONE_ENVIRONMENT;
   const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME;
+  const PINECONE_NAME_SPACE = process.env.PINECONE_NAME_SPACE;
 
   const CONDENSE_TEMPLATE_INIT = `Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
 
@@ -160,7 +161,7 @@
     parseFiles();
   }
 
-  async function initChatBookOpenAI() {
+  async function initChatBookOpenAI(knowledgeId) {
     getOpenAISettingData = await getOpenAISetting(knowledgeId);
     const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
@@ -168,7 +169,7 @@
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
       if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
-        console.log("OPENAI_API_BASE", OPENAI_API_BASE)
+        process.env.OPENAI_API_KEY = OPENAI_API_KEY
       }
       ChatOpenAIModel = new ChatOpenAI({ openAIApiKey: OPENAI_API_KEY, temperature: Number(OPENAI_Temperature) });    
       pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
@@ -350,13 +351,11 @@
   }
 
   async function chat(KnowledgeId, userId, question, history) {
-    await initChatBookOpenAI()
+    await initChatBookOpenAI(knowledgeId)
     // create chain
     const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE_" + String(KnowledgeId));
     const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE_" + String(KnowledgeId));
 
-    const PINECONE_INDEX_NAME = getOpenAISettingData.PINECONE_INDEX_NAME;
-    
     log("Chat KnowledgeId", KnowledgeId)
     log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
     log("Chat QA_TEMPLATE", QA_TEMPLATE)
@@ -375,7 +374,7 @@
   
       /* create vectorstore */
 
-      const PINECONE_NAME_SPACE_USE = getOpenAISettingData.PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
+      const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
       log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
 
       const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
@@ -452,7 +451,7 @@
   
       await PineconeStore.fromDocuments(docs, embeddings, {
         pineconeIndex: index,
-        namespace: getOpenAISettingData.PINECONE_NAME_SPACE,
+        namespace: PINECONE_NAME_SPACE + '_parseFolderFiles',
         textKey: 'text',
       });
 
@@ -463,13 +462,15 @@
   }
 
   async function parseFiles() {
-    await initChatBookOpenAI()
     try {
       const getKnowledgePageRS = await getKnowledgePage(0, 999);
       const getKnowledgePageData = getKnowledgePageRS.data;
       
       await Promise.all(getKnowledgePageData.map(async (KnowledgeItem)=>{
         const KnowledgeItemId = KnowledgeItem.id
+        await initChatBookOpenAI(KnowledgeItemId)
+        console.log("getOpenAISettingData", getOpenAISettingData, "KnowledgeItemId", KnowledgeItemId)
+        console.log("process.env.OPENAI_BASE_URL", process.env.OPENAI_BASE_URL)
         enableDir(DataDir + '/uploadfiles/' + String(userId))
         enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId))
         const directoryLoader = new DirectoryLoader(DataDir + '/uploadfiles/'  + String(userId) + '/' + String(KnowledgeItemId) + '/', {
@@ -495,11 +496,11 @@
           log("parseFiles textSplitter docs count: ", SplitterDocs.length)
           log('parseFiles creating vector store begin ...');
           
-          const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
-          const index = pinecone.Index(getOpenAISettingData.PINECONE_INDEX_NAME);  
+          const embeddings = new OpenAIEmbeddings({openAIApiKey: getOpenAISettingData.OPENAI_API_KEY});
+          const index = pinecone.Index(PINECONE_INDEX_NAME);  
           
-          const PINECONE_NAME_SPACE_USE = getOpenAISettingData.PINECONE_NAME_SPACE + '_' + String(KnowledgeItemId)
-          log("parseFiles getOpenAISettingData", getOpenAISettingData, index)
+          const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeItemId)
+          //log("parseFiles getOpenAISettingData", PINECONE_INDEX_NAME, pinecone, index)
           await PineconeStore.fromDocuments(SplitterDocs, embeddings, {
             pineconeIndex: index,
             namespace: PINECONE_NAME_SPACE_USE,
@@ -514,8 +515,8 @@
               ParsedFiles.push(fileName);
             }
           });
-          
-          const UpdateFileParseStatus = db.prepare('update files set status = ? where newName = ? and knowledge = ? and userId = ?');
+
+          const UpdateFileParseStatus = db.prepare('update files set status = ? where newName = ? and knowledgeId = ? and userId = ?');
           ParsedFiles.map((Item) => {
             UpdateFileParseStatus.run(1, Item, KnowledgeItemId, userId);
             const destinationFilePath = path.join(DataDir + '/parsedfiles/', Item);
@@ -804,7 +805,7 @@
             return Item
           })
       );
-      log("getKnowledgePage", RSDATA)
+      //log("getKnowledgePage", RSDATA)
     }
     const RS = {};
     RS['allpages'] = Math.ceil(RecordsTotal/pagesizeFiler);
