@@ -353,8 +353,8 @@
   async function chat(KnowledgeId, userId, question, history) {
     await initChatBookOpenAI(knowledgeId)
     // create chain
-    const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE_" + String(KnowledgeId));
-    const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE_" + String(KnowledgeId));
+    const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
+    const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE", KnowledgeId, userId);
 
     log("Chat KnowledgeId", KnowledgeId)
     log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
@@ -866,9 +866,9 @@
     DeleteLog.finalize();
   }
 
-  async function GetSetting(Name) {
+  async function GetSetting(Name, KnowledgeId, userId) {
     return await new Promise((resolve, reject) => {
-      db.get("SELECT content FROM setting where name='"+Name+"'", (err, result) => {
+      db.get("SELECT content FROM setting where name='"+Name+"' and KnowledgeId='"+KnowledgeId+"' and userId='"+userId+"'", (err, result) => {
         if (err) {
           reject(err);
         } else {
