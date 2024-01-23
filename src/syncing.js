@@ -394,8 +394,8 @@
     //res.end();
   }
 
-  async function chatKnowledge(KnowledgeId, userId, question, history) {
-    await initChatBookOpenAI(knowledgeId)
+  async function chatKnowledge(res, KnowledgeId, userId, question, history) {
+    await initChatBookOpenAIStream(res, 0)
     // create chain
     const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
     const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE", KnowledgeId, userId);
@@ -465,7 +465,7 @@
       const insertChatLog = db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
       insertChatLog.run(Number(KnowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
       insertChatLog.finalize();
-
+      res.end();
       return { text: response, sourceDocuments };
     } 
     catch (error) {

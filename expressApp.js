@@ -51,9 +51,9 @@ expressApp.post('/chat/knowledge', async (req, res) => {
   const { KnowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await syncing.chatKnowledge(Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await syncing.chatKnowledge(res, Number(KnowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
-  res.json(ChatMsg).end(); 
+  //res.json(ChatMsg).end(); 
 });
 
 expressApp.post('/setopenai', async (req, res) => {
