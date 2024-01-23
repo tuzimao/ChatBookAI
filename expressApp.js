@@ -40,10 +40,10 @@ expressApp.get('/chat', async (req, res) => {
 });
 
 expressApp.post('/chat/chat', async (req, res) => {
-  const { KnowledgeId, question, history } = req.body;
+  const { question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await syncing.chatChat(Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await syncing.chatChat(0, Number(userId), question, history);
   res.json(ChatMsg).end(); 
 });
 

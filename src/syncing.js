@@ -11,6 +11,7 @@
   import { Calculator } from "langchain/tools/calculator";
   import { BufferMemory } from "langchain/memory";
   import { ConversationChain } from "langchain/chains";
+  import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
   import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
   import { PineconeStore } from '@langchain/community/vectorstores/pinecone';
@@ -171,7 +172,36 @@
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
         process.env.OPENAI_API_KEY = OPENAI_API_KEY
       }
-      ChatOpenAIModel = new ChatOpenAI({ openAIApiKey: OPENAI_API_KEY, temperature: Number(OPENAI_Temperature) });    
+      ChatOpenAIModel = new ChatOpenAI({ 
+        openAIApiKey: OPENAI_API_KEY, 
+        temperature: Number(OPENAI_Temperature)
+       });    
+      pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
+    }
+  }
+
+  async function initChatBookOpenAIStream(knowledgeId) {
+    getOpenAISettingData = await getOpenAISetting(knowledgeId);
+    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
+    const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
+    const OPENAI_Temperature = getOpenAISettingData.Temperature;
+    if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
+      if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
+        process.env.OPENAI_BASE_URL = OPENAI_API_BASE
+        process.env.OPENAI_API_KEY = OPENAI_API_KEY
+      }
+      ChatOpenAIModel = new ChatOpenAI({ 
+        openAIApiKey: OPENAI_API_KEY, 
+        temperature: Number(OPENAI_Temperature),
+        streaming: true,
+        callbacks: [
+          {
+            handleLLMNewToken(token) {
+              console.log(token);
+            },
+          },
+        ],
+       });    
       pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
     }
   }
@@ -327,19 +357,21 @@
   
   async function debug() {
     
-    const template = "What is a good name for a company that makes {product}?";
-    const prompt = new PromptTemplate({
-      template: template,
-      inputVariables: ["product"],
-    });
+    //const template = "What is a good name for a company that makes {product}?";
+    //const prompt = new PromptTemplate({
+    //  template: template,
+    //  inputVariables: ["product"],
+    //});
     //const chain = new LLMChain({ llm: model, prompt: prompt });
     //const res = await chain.call({ product: "react admin template" });
     //log(res.text);
 
+    await initChatBookOpenAIStream(0)
     const memory = new BufferMemory();
-    const chain = new ConversationChain({ llm: model, memory: memory });
-    const res1 = await chain.call({ input: "Hi! How to use react mui to design a awesome website?" });
-    log(res1);
+    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
+    const response = await chain.call({ input: "什么是BITCOIN,要求写一个2010字的文稿" });
+    log("response", response);
+    return { text: response.response };
     //const res2 = await chain.call({ input: "I just know a little about REACT UI" });
     //log(res2);
     
@@ -349,85 +381,17 @@
     //log(res1);
     
   }
-
-  async function chatChat(KnowledgeId, userId, question, history) {
-    await initChatBookOpenAI(knowledgeId)
-    // create chain
-    const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
-    const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE", KnowledgeId, userId);
-
-    log("Chat KnowledgeId", KnowledgeId)
-    log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
-    log("Chat QA_TEMPLATE", QA_TEMPLATE)
-    log("Chat PINECONE_INDEX_NAME", PINECONE_INDEX_NAME)
-    
-    if (!question) {
-      return { message: 'No question in the request' };
-    }
   
-    // OpenAI recommends replacing newlines with spaces for best results
-    const sanitizedQuestion = question.trim().replaceAll('\n', ' ');
-  
-    try {
-      
-      const index = pinecone.Index(PINECONE_INDEX_NAME);
-  
-      /* create vectorstore */
-
-      const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
-      log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
-
-      const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
-      
-      const vectorStore = await PineconeStore.fromExistingIndex(
-        embeddings,
-        {
-          pineconeIndex: index,
-          textKey: 'text',
-          namespace: PINECONE_NAME_SPACE_USE,
-        },
-      );
-      
-      // Use a callback to get intermediate sources from the middle of the chain
-      let resolveWithDocuments;
-      const documentPromise = new Promise((resolve) => {
-        resolveWithDocuments = resolve;
-      });
-
-      const retriever = vectorStore.asRetriever({
-        callbacks: [
-          {
-            handleRetrieverEnd(documents) {
-              resolveWithDocuments(documents);
-            },
-          },
-        ],
-      });
-
-      const chain = makeChain(retriever, CONDENSE_TEMPLATE, QA_TEMPLATE);
-
-      const pastMessages = history.map((message) => {
-                                    return [`Human: ${message[0]}`, `Assistant: ${message[1]}`].join('\n');
-                                  }).join('\n');
-  
-      // Ask a question using chat history
-      const response = await chain.invoke({
-        question: sanitizedQuestion,
-        chat_history: pastMessages,
-      });
-  
-      const sourceDocuments = await documentPromise;
-
-      const insertChatLog = db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
-      insertChatLog.run(Number(KnowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
-      insertChatLog.finalize();
-
-      return { text: response, sourceDocuments };
-    } 
-    catch (error) {
-      log('Error Chat:', error);
-      return { error: error.message || 'Something went wrong' };
-    }
+  async function chatChat(knowledgeId, userId, question, history) {
+    await initChatBookOpenAIStream(0)
+    const memory = new BufferMemory();
+    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
+    await memory.chatHistory.addMessage(new HumanMessage(question));
+    const response = await chain.call({ input: question });
+    await memory.chatHistory.addMessage(new AIMessage(response.response));
+    //const loadMemoryVariables = await memory.loadMemoryVariables({});
+    //log("response", response);
+    return { text: response.response };
   }
 
   async function chatKnowledge(KnowledgeId, userId, question, history) {
