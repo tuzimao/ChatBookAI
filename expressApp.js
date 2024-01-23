@@ -39,11 +39,19 @@ expressApp.get('/chat', async (req, res) => {
   res.json(ChatMsg).end(); 
 });
 
-expressApp.post('/chat', async (req, res) => {
+expressApp.post('/chat/chat', async (req, res) => {
   const { KnowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await syncing.chat(Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await syncing.chatChat(Number(KnowledgeId), Number(userId), question, history);
+  res.json(ChatMsg).end(); 
+});
+
+expressApp.post('/chat/knowledge', async (req, res) => {
+  const { KnowledgeId, question, history } = req.body;
+  const userId = 1;
+  console.log("question", question)
+  const ChatMsg = await syncing.chatKnowledge(Number(KnowledgeId), Number(userId), question, history);
   res.json(ChatMsg).end(); 
 });
 

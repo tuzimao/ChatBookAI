@@ -350,7 +350,87 @@
     
   }
 
-  async function chat(KnowledgeId, userId, question, history) {
+  async function chatChat(KnowledgeId, userId, question, history) {
+    await initChatBookOpenAI(knowledgeId)
+    // create chain
+    const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
+    const QA_TEMPLATE       = await GetSetting("QA_TEMPLATE", KnowledgeId, userId);
+
+    log("Chat KnowledgeId", KnowledgeId)
+    log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
+    log("Chat QA_TEMPLATE", QA_TEMPLATE)
+    log("Chat PINECONE_INDEX_NAME", PINECONE_INDEX_NAME)
+    
+    if (!question) {
+      return { message: 'No question in the request' };
+    }
+  
+    // OpenAI recommends replacing newlines with spaces for best results
+    const sanitizedQuestion = question.trim().replaceAll('\n', ' ');
+  
+    try {
+      
+      const index = pinecone.Index(PINECONE_INDEX_NAME);
+  
+      /* create vectorstore */
+
+      const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
+      log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
+
+      const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
+      
+      const vectorStore = await PineconeStore.fromExistingIndex(
+        embeddings,
+        {
+          pineconeIndex: index,
+          textKey: 'text',
+          namespace: PINECONE_NAME_SPACE_USE,
+        },
+      );
+      
+      // Use a callback to get intermediate sources from the middle of the chain
+      let resolveWithDocuments;
+      const documentPromise = new Promise((resolve) => {
+        resolveWithDocuments = resolve;
+      });
+
+      const retriever = vectorStore.asRetriever({
+        callbacks: [
+          {
+            handleRetrieverEnd(documents) {
+              resolveWithDocuments(documents);
+            },
+          },
+        ],
+      });
+
+      const chain = makeChain(retriever, CONDENSE_TEMPLATE, QA_TEMPLATE);
+
+      const pastMessages = history.map((message) => {
+                                    return [`Human: ${message[0]}`, `Assistant: ${message[1]}`].join('\n');
+                                  }).join('\n');
+  
+      // Ask a question using chat history
+      const response = await chain.invoke({
+        question: sanitizedQuestion,
+        chat_history: pastMessages,
+      });
+  
+      const sourceDocuments = await documentPromise;
+
+      const insertChatLog = db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
+      insertChatLog.run(Number(KnowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
+      insertChatLog.finalize();
+
+      return { text: response, sourceDocuments };
+    } 
+    catch (error) {
+      log('Error Chat:', error);
+      return { error: error.message || 'Something went wrong' };
+    }
+  }
+
+  async function chatKnowledge(KnowledgeId, userId, question, history) {
     await initChatBookOpenAI(knowledgeId)
     // create chain
     const CONDENSE_TEMPLATE = await GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
@@ -1007,7 +1087,8 @@
     restrictToLocalhost,
     parseFolderFiles,
     parseFiles,
-    chat,
+    chatChat,
+    chatKnowledge,
     getOpenAISetting,
     setOpenAISetting,
     getTemplate,
