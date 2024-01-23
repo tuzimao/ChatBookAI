@@ -180,7 +180,7 @@
     }
   }
 
-  async function initChatBookOpenAIStream(knowledgeId) {
+  async function initChatBookOpenAIStream(res, knowledgeId) {
     getOpenAISettingData = await getOpenAISetting(knowledgeId);
     const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
@@ -197,7 +197,7 @@
         callbacks: [
           {
             handleLLMNewToken(token) {
-              console.log(token);
+              res.write(token);
             },
           },
         ],
@@ -355,7 +355,7 @@
     insertFiles.finalize();
   }
   
-  async function debug() {
+  async function debug(res) {
     
     //const template = "What is a good name for a company that makes {product}?";
     //const prompt = new PromptTemplate({
@@ -366,7 +366,7 @@
     //const res = await chain.call({ product: "react admin template" });
     //log(res.text);
 
-    await initChatBookOpenAIStream(0)
+    await initChatBookOpenAIStream(res, 0)
     const memory = new BufferMemory();
     const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
     const response = await chain.call({ input: "什么是BITCOIN,要求写一个2010字的文稿" });
@@ -382,16 +382,16 @@
     
   }
   
-  async function chatChat(knowledgeId, userId, question, history) {
-    await initChatBookOpenAIStream(0)
+  async function chatChat(res, knowledgeId, userId, question, history) {
+    await initChatBookOpenAIStream(res, 0)
     const memory = new BufferMemory();
     const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
-    await memory.chatHistory.addMessage(new HumanMessage(question));
-    const response = await chain.call({ input: question });
-    await memory.chatHistory.addMessage(new AIMessage(response.response));
+    //await memory.chatHistory.addMessage(new HumanMessage(question));
+    await chain.call({ input: question });
+    //await memory.chatHistory.addMessage(new AIMessage(response.response));
     //const loadMemoryVariables = await memory.loadMemoryVariables({});
     //log("response", response);
-    return { text: response.response };
+    //res.end();
   }
 
   async function chatKnowledge(KnowledgeId, userId, question, history) {

@@ -25,8 +25,8 @@ cron.schedule('*/3 * * * *', () => {
 });
 
 expressApp.get('/debug', async (req, res) => {
-  await syncing.debug();
-  res.json({}).end(); 
+  await syncing.debug(res);
+  res.end(); 
 });
 
 expressApp.get('/chat', async (req, res) => {
@@ -43,8 +43,8 @@ expressApp.post('/chat/chat', async (req, res) => {
   const { question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await syncing.chatChat(0, Number(userId), question, history);
-  res.json(ChatMsg).end(); 
+  await syncing.chatChat(res, 0, Number(userId), question, history);
+  res.end(); 
 });
 
 expressApp.post('/chat/knowledge', async (req, res) => {
@@ -52,6 +52,7 @@ expressApp.post('/chat/knowledge', async (req, res) => {
   const userId = 1;
   console.log("question", question)
   const ChatMsg = await syncing.chatKnowledge(Number(KnowledgeId), Number(userId), question, history);
+  console.log("ChatMsg", ChatMsg)
   res.json(ChatMsg).end(); 
 });
 
