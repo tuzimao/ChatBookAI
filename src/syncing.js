@@ -12,6 +12,7 @@
   import { BufferMemory } from "langchain/memory";
   import { ConversationChain } from "langchain/chains";
   import { HumanMessage, AIMessage } from "@langchain/core/messages";
+  import { ChatMessageHistory } from "langchain/stores/message/in_memory";
 
   import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
   import { PineconeStore } from '@langchain/community/vectorstores/pinecone';
@@ -356,42 +357,39 @@
   }
   
   async function debug(res) {
-    
-    //const template = "What is a good name for a company that makes {product}?";
-    //const prompt = new PromptTemplate({
-    //  template: template,
-    //  inputVariables: ["product"],
-    //});
-    //const chain = new LLMChain({ llm: model, prompt: prompt });
-    //const res = await chain.call({ product: "react admin template" });
-    //log(res.text);
-
+    const question = "your name?"
     await initChatBookOpenAIStream(res, 0)
-    const memory = new BufferMemory();
-    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
-    const response = await chain.call({ input: "什么是BITCOIN,要求写一个2010字的文稿" });
-    log("response", response);
-    return { text: response.response };
-    //const res2 = await chain.call({ input: "I just know a little about REACT UI" });
-    //log(res2);
+
+    const pastMessages = [
+      new HumanMessage("what is Bitcoin?"),
+      new AIMessage("Nice to meet you, Jonas!"),
+    ];
     
-    //const res = await prompt.format({ product: "react admin template" });
-    //log(res);
-    //const res1 = await model.call(res);    
-    //log(res1);
+    const memory = new BufferMemory({
+      chatHistory: new ChatMessageHistory(pastMessages),
+    });
+
+    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
+
+    const res2 = await chain.call({ input: "What's the price?" });
+    console.log({ res2 });
     
   }
   
   async function chatChat(res, knowledgeId, userId, question, history) {
     await initChatBookOpenAIStream(res, 0)
-    const memory = new BufferMemory();
+    const pastMessages = []
+    if(history && history.length > 0) {
+      history.map((Item) => {
+        pastMessages.push(new HumanMessage(Item[0]))
+        pastMessages.push(new AIMessage(Item[1]))
+      })
+    }
+    const memory = new BufferMemory({
+      chatHistory: new ChatMessageHistory(pastMessages),
+    });
     const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
-    //await memory.chatHistory.addMessage(new HumanMessage(question));
-    await chain.call({ input: question });
-    //await memory.chatHistory.addMessage(new AIMessage(response.response));
-    //const loadMemoryVariables = await memory.loadMemoryVariables({});
-    //log("response", response);
-    //res.end();
+    await chain.call({ input: question});
   }
 
   async function chatKnowledge(res, KnowledgeId, userId, question, history) {
@@ -723,7 +721,7 @@
             return {...Item, status:ItemStatus, timestamp: formatDateFromTimestamp(Item.timestamp)}
           })
       );
-      log("getFilesKnowledgeId", RSDATA)
+      //log("getFilesKnowledgeId", RSDATA)
     }
     const RS = {};
     RS['allpages'] = Math.ceil(RecordsTotal/pagesizeFiler);
