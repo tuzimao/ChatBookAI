@@ -50,16 +50,16 @@ let DataDir = null;
 let model = null;
 let ChatOpenAIModel = null
 let pinecone = null
-let getOpenAISettingData = null
+let getLLMSSettingData = null
 let knowledgeId = 0
 let userId = 1
 
 
   async function initChatBookOpenAI(knowledgeId) {
-    getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
-    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
-    const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
-    const OPENAI_Temperature = getOpenAISettingData.Temperature;
+    getLLMSSettingData = await syncing.getLLMSSetting(knowledgeId);
+    const OPENAI_API_BASE = getLLMSSettingData.OPENAI_API_BASE;
+    const OPENAI_API_KEY = getLLMSSettingData.OPENAI_API_KEY;
+    const OPENAI_Temperature = getLLMSSettingData.Temperature;
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
       if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
@@ -74,10 +74,11 @@ let userId = 1
   }
 
   async function initChatBookOpenAIStream(res, knowledgeId) {
-    getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
-    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
-    const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
-    const OPENAI_Temperature = getOpenAISettingData.Temperature;
+    getLLMSSettingData = await syncing.getLLMSSetting(knowledgeId);
+    console.log("OpenAI getLLMSSettingData", getLLMSSettingData)
+    const OPENAI_API_BASE = getLLMSSettingData.OPENAI_API_BASE;
+    const OPENAI_API_KEY = getLLMSSettingData.OPENAI_API_KEY;
+    const OPENAI_Temperature = getLLMSSettingData.Temperature;
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
       if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
@@ -100,7 +101,7 @@ let userId = 1
   }
 
   async function chatChatOpenAI(res, knowledgeId, userId, question, history) {
-    await initChatBookOpenAIStream(res, 0)
+    await initChatBookOpenAIStream(res, knowledgeId)
     const pastMessages = []
     if(history && history.length > 0) {
       history.map((Item) => {
@@ -116,7 +117,7 @@ let userId = 1
   }
 
   async function chatKnowledgeOpenAI(res, KnowledgeId, userId, question, history) {
-    await initChatBookOpenAIStream(res, 0)
+    await initChatBookOpenAIStream(res, KnowledgeId)
     // create chain
     const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
     const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", KnowledgeId, userId);
@@ -142,7 +143,7 @@ let userId = 1
       const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
       log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
 
-      const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
+      const embeddings = new OpenAIEmbeddings({openAIApiKey:getLLMSSettingData.OPENAI_API_KEY});
       
       const vectorStore = await PineconeStore.fromExistingIndex(
         embeddings,
@@ -244,9 +245,9 @@ let userId = 1
     return serializedDocs.join(separator);
   }
   
-  async function debug(res) {
+  async function debug(res, KnowledgeId) {
     const question = "your name?"
-    await initChatBookOpenAIStream(res, 0)
+    await initChatBookOpenAIStream(res, KnowledgeId)
 
     const pastMessages = [
       new HumanMessage("what is Bitcoin?"),
@@ -272,10 +273,10 @@ let userId = 1
       await Promise.all(getKnowledgePageData.map(async (KnowledgeItem)=>{
         const KnowledgeItemId = KnowledgeItem.id
         await initChatBookOpenAI(KnowledgeItemId)
-        console.log("getOpenAISettingData", getOpenAISettingData, "KnowledgeItemId", KnowledgeItemId)
+        console.log("getLLMSSettingData", getLLMSSettingData, "KnowledgeItemId", KnowledgeItemId)
         console.log("process.env.OPENAI_BASE_URL", process.env.OPENAI_BASE_URL)
-        enableDir(DataDir + '/uploadfiles/' + String(userId))
-        enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId))
+        syncing.enableDir(DataDir + '/uploadfiles/' + String(userId))
+        syncing.enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId))
         const directoryLoader = new DirectoryLoader(DataDir + '/uploadfiles/'  + String(userId) + '/' + String(KnowledgeItemId) + '/', {
           '.pdf': (path) => new PDFLoader(path),
           '.docx': (path) => new DocxLoader(path),
@@ -299,11 +300,11 @@ let userId = 1
           log("parseFiles textSplitter docs count: ", SplitterDocs.length)
           log('parseFiles creating vector store begin ...');
           
-          const embeddings = new OpenAIEmbeddings({openAIApiKey: getOpenAISettingData.OPENAI_API_KEY});
+          const embeddings = new OpenAIEmbeddings({openAIApiKey: getLLMSSettingData.OPENAI_API_KEY});
           const index = pinecone.Index(PINECONE_INDEX_NAME);  
           
           const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeItemId)
-          //log("parseFiles getOpenAISettingData", PINECONE_INDEX_NAME, pinecone, index)
+          //log("parseFiles getLLMSSettingData", PINECONE_INDEX_NAME, pinecone, index)
           await PineconeStore.fromDocuments(SplitterDocs, embeddings, {
             pineconeIndex: index,
             namespace: PINECONE_NAME_SPACE_USE,

@@ -52,67 +52,42 @@ let DataDir = null;
 let model = null;
 let ChatGeminiModel = null
 let pinecone = null
-let getOpenAISettingData = null
+let getLLMSSettingData = null
 let knowledgeId = 0
 let userId = 1
 
 
   async function initChatBookGemini(knowledgeId) {
-    getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
-    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
-    const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
-    const OPENAI_Temperature = getOpenAISettingData.Temperature;
-    if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
-      if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
-        process.env.OPENAI_BASE_URL = OPENAI_API_BASE
-        process.env.OPENAI_API_KEY = OPENAI_API_KEY
-      }
-      ChatGeminiModel = new ChatGemini({ 
-        openAIApiKey: OPENAI_API_KEY, 
-        temperature: Number(OPENAI_Temperature)
-       });    
-      pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
-    }
+    await initChatBookGeminiStream(knowledgeId)
   }
 
-  async function initChatBookGeminiStream(res, knowledgeId) {
-    getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
-    const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
-    const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
-    const OPENAI_Temperature = getOpenAISettingData.Temperature;
+  async function initChatBookGeminiStream(knowledgeId) {
+    getLLMSSettingData = await syncing.getLLMSSetting(knowledgeId);
+    console.log("Gemini getLLMSSettingData", getLLMSSettingData, knowledgeId)
+    const OPENAI_API_BASE = getLLMSSettingData.OPENAI_API_BASE;
+    const OPENAI_API_KEY = getLLMSSettingData.OPENAI_API_KEY;
     if(OPENAI_API_KEY && PINECONE_API_KEY && PINECONE_ENVIRONMENT) {
       if(OPENAI_API_BASE && OPENAI_API_BASE !='' && OPENAI_API_BASE.length > 16) {
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
         process.env.OPENAI_API_KEY = OPENAI_API_KEY
       }
-      ChatGeminiModel = new ChatGemini({ 
-        openAIApiKey: OPENAI_API_KEY, 
-        temperature: Number(OPENAI_Temperature),
-        streaming: true,
-        callbacks: [
-          {
-            handleLLMNewToken(token) {
-              res.write(token);
+      process.env.GOOGLE_API_KEY = OPENAI_API_KEY
+      ChatGeminiModel = new ChatGoogleGenerativeAI({
+          modelName: getLLMSSettingData.ModelName ?? "gemini-pro",
+          maxOutputTokens: 2048,
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
-          },
-        ],
-       });    
+          ],
+      });
       pinecone = new Pinecone({environment: PINECONE_ENVIRONMENT, apiKey: PINECONE_API_KEY,});
     }
   }
 
   async function chatChatGemini(res, knowledgeId, userId, question, history) {
-    process.env.GOOGLE_API_KEY = "AIzaSyAWOYV2IAY6QuYvzjTcEkLdRprXEkCjZvM"
-    const model = new ChatGoogleGenerativeAI({
-        modelName: "gemini-pro",
-        maxOutputTokens: 2048,
-        safetySettings: [
-          {
-            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-            threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-          },
-        ],
-    });
+    await initChatBookGeminiStream(knowledgeId)
     const input2 = [
         new HumanMessage({
           content: [
@@ -123,16 +98,16 @@ let userId = 1
           ],
         }),
       ];    
-    const res3 = await model.stream(input2);
+    const res3 = await ChatGeminiModel.stream(input2);
     for await (const chunk of res3) {
-        console.log(chunk.content);
+        //console.log(chunk.content);
         res.write(chunk.content);
     }    
     res.end();
   }
 
   async function chatKnowledgeGemini(res, KnowledgeId, userId, question, history) {
-    await initChatBookGeminiStream(res, 0)
+    await initChatBookGeminiStream(knowledgeId)
     // create chain
     const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
     const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", KnowledgeId, userId);
@@ -158,7 +133,7 @@ let userId = 1
       const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
       log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
 
-      const embeddings = new OpenAIEmbeddings({openAIApiKey:getOpenAISettingData.OPENAI_API_KEY});
+      const embeddings = new OpenAIEmbeddings({openAIApiKey:getLLMSSettingData.OPENAI_API_KEY});
       
       const vectorStore = await PineconeStore.fromExistingIndex(
         embeddings,
@@ -298,7 +273,7 @@ let userId = 1
       await Promise.all(getKnowledgePageData.map(async (KnowledgeItem)=>{
         const KnowledgeItemId = KnowledgeItem.id
         await initChatBookGemini(KnowledgeItemId)
-        console.log("getOpenAISettingData", getOpenAISettingData, "KnowledgeItemId", KnowledgeItemId)
+        console.log("getLLMSSettingData", getLLMSSettingData, "KnowledgeItemId", KnowledgeItemId)
         console.log("process.env.OPENAI_BASE_URL", process.env.OPENAI_BASE_URL)
         enableDir(DataDir + '/uploadfiles/' + String(userId))
         enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(KnowledgeItemId))
@@ -325,11 +300,11 @@ let userId = 1
           log("parseFiles textSplitter docs count: ", SplitterDocs.length)
           log('parseFiles creating vector store begin ...');
           
-          const embeddings = new OpenAIEmbeddings({openAIApiKey: getOpenAISettingData.OPENAI_API_KEY});
+          const embeddings = new OpenAIEmbeddings({openAIApiKey: getLLMSSettingData.OPENAI_API_KEY});
           const index = pinecone.Index(PINECONE_INDEX_NAME);  
           
           const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeItemId)
-          //log("parseFiles getOpenAISettingData", PINECONE_INDEX_NAME, pinecone, index)
+          //log("parseFiles getLLMSSettingData", PINECONE_INDEX_NAME, pinecone, index)
           await PineconeStore.fromDocuments(SplitterDocs, embeddings, {
             pineconeIndex: index,
             namespace: PINECONE_NAME_SPACE_USE,
@@ -379,7 +354,6 @@ let userId = 1
     insertStat.finalize();
     console.log(Action1, Action2, Action3, Action4, Action5, Action6, Action7, Action8, Action9, Action10)
   }
-
 
   export default {
     debugGemeni,

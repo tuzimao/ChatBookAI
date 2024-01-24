@@ -148,7 +148,7 @@
     enableDir(DataDir + '/parsedfiles/');
   }
 
-  async function getOpenAISetting(knowledgeId) {
+  async function getLLMSSetting(knowledgeId) {
     const knowledgeIdFilter = filterString(knowledgeId)
     const userIdFilter = Number(userId)
     const SettingRS = await new Promise((resolve, reject) => {
@@ -659,12 +659,15 @@
 
   function filterString(input) {
     log("filterString input:", input)
-    if(input) {
-      const sanitizedInput = input.replace(/[^a-zA-Z0-9_\-@. ]/g, '');
-      log("filterString output:", sanitizedInput)
+    if (typeof value === 'number') {
+
       return input;
-    }
-    else {
+    } 
+    else if (typeof value === 'string') {
+
+      return input;
+    } else {
+
       return input;
     }
   }
@@ -731,9 +734,10 @@
     filterString,
     mkdirForData,
     copyFileSync,
+    enableDir,
     timestampToDate,
     restrictToLocalhost,
-    getOpenAISetting,
+    getLLMSSetting,
     setOpenAISetting,
     getTemplate,
     setTemplate,

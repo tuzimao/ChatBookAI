@@ -34,44 +34,44 @@ expressApp.get('/debug', async (req, res) => {
 
 expressApp.get('/chat', async (req, res) => {
   //const { question, history } = req.params;
-  const KnowledgeId = 36
+  const knowledgeId = 36
   const userId = 1
   const question = "what is Bitcoin?"
   const history = []
-  const ChatMsg = await openai.chat(KnowledgeId, userId, question, history);
+  const ChatMsg = await openai.chat(knowledgeId, userId, question, history);
   res.json(ChatMsg).end(); 
 });
 
 expressApp.post('/chat/chat/openai', async (req, res) => {
-  const { question, history } = req.body;
+  const { knowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  await openai.chatChatOpenAI(res, 0, Number(userId), question, history);
+  await openai.chatChatOpenAI(res, knowledgeId, Number(userId), question, history);
   res.end(); 
 });
 
 expressApp.post('/chat/knowledge/openai', async (req, res) => {
-  const { KnowledgeId, question, history } = req.body;
+  const { knowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await openai.chatKnowledgeOpenAI(res, Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await openai.chatKnowledgeOpenAI(res, Number(knowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
   //res.json(ChatMsg).end(); 
 });
 
 expressApp.post('/chat/chat/gemini', async (req, res) => {
-  const { question, history } = req.body;
+  const { knowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  await gemini.chatChatGemini(res, 0, Number(userId), question, history);
+  await gemini.chatChatGemini(res, knowledgeId, Number(userId), question, history);
   res.end(); 
 });
 
 expressApp.post('/chat/knowledge/gemini', async (req, res) => {
-  const { KnowledgeId, question, history } = req.body;
+  const { knowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await gemini.chatKnowledgeGemini(res, Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await gemini.chatKnowledgeGemini(res, Number(knowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
   //res.json(ChatMsg).end(); 
 });
@@ -84,7 +84,7 @@ expressApp.post('/setopenai', async (req, res) => {
 
 expressApp.get('/getopenai/:knowledgeId', async (req, res) => {
   const { knowledgeId} = req.params;
-  const OpenAISetting = await syncing.getOpenAISetting(knowledgeId);
+  const OpenAISetting = await syncing.getLLMSSetting(knowledgeId);
   res.json(OpenAISetting).end(); 
 });
 
