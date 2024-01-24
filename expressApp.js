@@ -1,12 +1,14 @@
 // expressApp.js
 import express from 'express';
 import syncing from './src/syncing.js';
+import openai from './src/model/openai.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import agentRoutes from './src/router/agent.js';
 import cron from 'node-cron';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,12 +22,12 @@ expressApp.use(bodyParser.json());
 
 cron.schedule('*/3 * * * *', () => {
   console.log('Task Begin !');
-  syncing.parseFiles();
+  openai.parseFiles();
   console.log('Task End !');
 });
 
 expressApp.get('/debug', async (req, res) => {
-  await syncing.debug(res);
+  await openai.debug(res);
   res.end(); 
 });
 
@@ -35,7 +37,7 @@ expressApp.get('/chat', async (req, res) => {
   const userId = 1
   const question = "what is Bitcoin?"
   const history = []
-  const ChatMsg = await syncing.chat(KnowledgeId, userId, question, history);
+  const ChatMsg = await openai.chat(KnowledgeId, userId, question, history);
   res.json(ChatMsg).end(); 
 });
 
@@ -43,7 +45,7 @@ expressApp.post('/chat/chat', async (req, res) => {
   const { question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  await syncing.chatChat(res, 0, Number(userId), question, history);
+  await openai.chatChat(res, 0, Number(userId), question, history);
   res.end(); 
 });
 
@@ -51,7 +53,7 @@ expressApp.post('/chat/knowledge', async (req, res) => {
   const { KnowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await syncing.chatKnowledge(res, Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await openai.chatKnowledge(res, Number(KnowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
   //res.json(ChatMsg).end(); 
 });
@@ -103,13 +105,8 @@ expressApp.post('/uploadfiles', syncing.uploadfiles().array('files', 10), async 
   res.json({"status":"ok", "msg":"Uploaded Success"}).end(); 
 });
 
-expressApp.get('/parseFolderFiles', async (req, res) => {
-  await syncing.parseFolderFiles("D:/GitHub/tu/gpt4-pdf-chatbot-langchain/docs");
-  res.json({}).end(); 
-});
-
 expressApp.get('/parseFiles', async (req, res) => {
-  await syncing.parseFiles();
+  await openai.parseFiles();
   res.json({}).end(); 
 });
 
