@@ -95,8 +95,8 @@
         db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('OPENAI_API_KEY','','openaisetting',1,1);`);
         db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('Temperature','0.1','openaisetting',1,1);`);
         db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('ModelName','gpt-3.5-turbo','openaisetting',1,1);`);
-        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('CONDENSE_TEMPLATE',?,'TEMPLATE_1',1,1);`, [CONDENSE_TEMPLATE_INIT]);
-        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('QA_TEMPLATE',?,'TEMPLATE_1',1,1);`, [QA_TEMPLATE_INIT]);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('CONDENSE_TEMPLATE',?,'TEMPLATE',1,1);`, [CONDENSE_TEMPLATE_INIT]);
+        db.run(`insert or ignore into setting (name, content, type, knowledgeId, userId) values('QA_TEMPLATE',?,'TEMPLATE',1,1);`, [QA_TEMPLATE_INIT]);
         db.run(`
             CREATE TABLE IF NOT EXISTS files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -420,7 +420,7 @@
   }
 
   async function getChatLogByKnowledgeIdAndUserId(knowledgeId, userId, pageid, pagesize) {
-    const KnowledgeIdFiler = Number(knowledgeId) < 0 ? 0 : Number(knowledgeId);
+    const KnowledgeIdFiler = filterString(knowledgeId);
     const userIdFiler = Number(userId) < 0 ? 0 : Number(userId);
     const pageidFiler = Number(pageid) < 0 ? 0 : Number(pageid);
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);

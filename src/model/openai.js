@@ -130,6 +130,7 @@ let ChatBookOpenAIStreamResponse = ''
     const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", knowledgeId, userId);
     const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", knowledgeId, userId);
 
+    log("Chat pinecone", pinecone)
     log("Chat knowledgeId", knowledgeId)
     log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
     log("Chat QA_TEMPLATE", QA_TEMPLATE)
