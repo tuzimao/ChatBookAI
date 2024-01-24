@@ -134,7 +134,7 @@
         db.run(`
             CREATE TABLE IF NOT EXISTS chatlog (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                knowledgeId INTEGER not null default 0,
+                knowledgeId TEXT not null default 0,
                 send TEXT  not null,
                 received TEXT not null,
                 userId INTEGER not null default 0,
@@ -304,7 +304,7 @@
     filesInfo.map((Item)=>{
       const suffixName = path.extname(Item.originalName).toLowerCase();
       insertFiles.run(knowledgeId, suffixName, Item.newName, Item.originalName, Item.hash, Date.now(), Number(userId));
-      // Move Files To KnowledgeId Dir
+      // Move Files To knowledgeId Dir
       enableDir(DataDir + '/uploadfiles/' + String(userId) )
       enableDir(DataDir + '/uploadfiles/' + String(userId) + '/' + String(knowledgeId))
       fs.rename(DataDir + '/uploadfiles/' + Item.newName, DataDir + '/uploadfiles/'  + String(userId) + '/' + String(knowledgeId) + '/' + Item.newName, (err) => {
@@ -368,8 +368,8 @@
     return RS;
   }
 
-  async function getFilesKnowledgeId(KnowledgeId, pageid, pagesize) {
-    const KnowledgeIdFiler = Number(KnowledgeId) < 0 ? 0 : Number(KnowledgeId);
+  async function getFilesKnowledgeId(knowledgeId, pageid, pagesize) {
+    const KnowledgeIdFiler = Number(knowledgeId) < 0 ? 0 : Number(knowledgeId);
     const pageidFiler = Number(pageid) < 0 ? 0 : Number(pageid);
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);
     const From = pageidFiler * pagesizeFiler;
@@ -419,8 +419,8 @@
     return RS;
   }
 
-  async function getChatLogByKnowledgeIdAndUserId(KnowledgeId, userId, pageid, pagesize) {
-    const KnowledgeIdFiler = Number(KnowledgeId) < 0 ? 0 : Number(KnowledgeId);
+  async function getChatLogByKnowledgeIdAndUserId(knowledgeId, userId, pageid, pagesize) {
+    const KnowledgeIdFiler = Number(knowledgeId) < 0 ? 0 : Number(knowledgeId);
     const userIdFiler = Number(userId) < 0 ? 0 : Number(userId);
     const pageidFiler = Number(pageid) < 0 ? 0 : Number(pageid);
     const pagesizeFiler = Number(pagesize) < 5 ? 5 : Number(pagesize);
@@ -594,9 +594,9 @@
     DeleteLog.finalize();
   }
 
-  async function GetSetting(Name, KnowledgeId, userId) {
+  async function GetSetting(Name, knowledgeId, userId) {
     return await new Promise((resolve, reject) => {
-      db.get("SELECT content FROM setting where name='"+Name+"' and KnowledgeId='"+KnowledgeId+"' and userId='"+userId+"'", (err, result) => {
+      db.get("SELECT content FROM setting where name='"+Name+"' and knowledgeId='"+knowledgeId+"' and userId='"+userId+"'", (err, result) => {
         if (err) {
           reject(err);
         } else {

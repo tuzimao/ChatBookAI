@@ -99,20 +99,26 @@ let userId = 1
         }),
       ];    
     const res3 = await ChatGeminiModel.stream(input2);
+    let response = '';
     for await (const chunk of res3) {
         //console.log(chunk.content);
         res.write(chunk.content);
-    }    
+        response = response + chunk.content
+    }
+    const insertChatLog = syncing.db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
+    insertChatLog.run(knowledgeId, question, response, userId, Date.now(), JSON.stringify([]), JSON.stringify(history));
+    insertChatLog.finalize();
     res.end();
+
   }
 
-  async function chatKnowledgeGemini(res, KnowledgeId, userId, question, history) {
+  async function chatKnowledgeGemini(res, knowledgeId, userId, question, history) {
     await initChatBookGeminiStream(knowledgeId)
     // create chain
-    const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
-    const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", KnowledgeId, userId);
+    const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", knowledgeId, userId);
+    const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", knowledgeId, userId);
 
-    log("Chat KnowledgeId", KnowledgeId)
+    log("Chat knowledgeId", knowledgeId)
     log("Chat CONDENSE_TEMPLATE", CONDENSE_TEMPLATE)
     log("Chat QA_TEMPLATE", QA_TEMPLATE)
     log("Chat PINECONE_INDEX_NAME", PINECONE_INDEX_NAME)
@@ -130,7 +136,7 @@ let userId = 1
   
       /* create vectorstore */
 
-      const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(KnowledgeId)
+      const PINECONE_NAME_SPACE_USE = PINECONE_NAME_SPACE + '_' + String(knowledgeId)
       log("Chat PINECONE_NAME_SPACE_USE", PINECONE_NAME_SPACE_USE)
 
       const embeddings = new OpenAIEmbeddings({openAIApiKey:getLLMSSettingData.OPENAI_API_KEY});
@@ -175,7 +181,7 @@ let userId = 1
       const sourceDocuments = await documentPromise;
 
       const insertChatLog = syncing.db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
-      insertChatLog.run(Number(KnowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
+      insertChatLog.run(Number(knowledgeId), question, response, userId, Date.now(), JSON.stringify(sourceDocuments), JSON.stringify(history));
       insertChatLog.finalize();
       res.end();
       return { text: response, sourceDocuments };
