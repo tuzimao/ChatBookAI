@@ -2,6 +2,7 @@
 import express from 'express';
 import syncing from './src/syncing.js';
 import openai from './src/model/openai.js';
+import gemini from './src/model/gemini.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
@@ -27,7 +28,7 @@ cron.schedule('*/3 * * * *', () => {
 });
 
 expressApp.get('/debug', async (req, res) => {
-  await openai.debug(res);
+  await gemini.debugGemeni(res);
   res.end(); 
 });
 
@@ -41,19 +42,36 @@ expressApp.get('/chat', async (req, res) => {
   res.json(ChatMsg).end(); 
 });
 
-expressApp.post('/chat/chat', async (req, res) => {
+expressApp.post('/chat/chat/openai', async (req, res) => {
   const { question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  await openai.chatChat(res, 0, Number(userId), question, history);
+  await openai.chatChatOpenAI(res, 0, Number(userId), question, history);
   res.end(); 
 });
 
-expressApp.post('/chat/knowledge', async (req, res) => {
+expressApp.post('/chat/knowledge/openai', async (req, res) => {
   const { KnowledgeId, question, history } = req.body;
   const userId = 1;
   console.log("question", question)
-  const ChatMsg = await openai.chatKnowledge(res, Number(KnowledgeId), Number(userId), question, history);
+  const ChatMsg = await openai.chatKnowledgeOpenAI(res, Number(KnowledgeId), Number(userId), question, history);
+  console.log("ChatMsg", ChatMsg)
+  //res.json(ChatMsg).end(); 
+});
+
+expressApp.post('/chat/chat/gemini', async (req, res) => {
+  const { question, history } = req.body;
+  const userId = 1;
+  console.log("question", question)
+  await gemini.chatChatGemini(res, 0, Number(userId), question, history);
+  res.end(); 
+});
+
+expressApp.post('/chat/knowledge/gemini', async (req, res) => {
+  const { KnowledgeId, question, history } = req.body;
+  const userId = 1;
+  console.log("question", question)
+  const ChatMsg = await gemini.chatKnowledgeGemini(res, Number(KnowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
   //res.json(ChatMsg).end(); 
 });

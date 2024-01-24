@@ -86,7 +86,7 @@
                 name TEXT KEY not null,
                 content TEXT not null,
                 type TEXT not null,
-                knowledgeId INTEGER not null,
+                knowledgeId TEXT not null,
                 userId INTEGER not null,
                 UNIQUE(name, userId, knowledgeId)
             );
@@ -149,7 +149,7 @@
   }
 
   async function getOpenAISetting(knowledgeId) {
-    const knowledgeIdFilter = Number(knowledgeId)
+    const knowledgeIdFilter = filterString(knowledgeId)
     const userIdFilter = Number(userId)
     const SettingRS = await new Promise((resolve, reject) => {
             db.all("SELECT name,content from setting where type='openaisetting' and knowledgeId='"+knowledgeIdFilter+"' and userId='"+userIdFilter+"'", (err, result) => {
@@ -170,7 +170,7 @@
   }
 
   async function setOpenAISetting(Params) {
-    const knowledgeIdFilter = Number(Params.knowledgeId)
+    const knowledgeIdFilter = filterString(Params.knowledgeId)
     const userIdFilter = Number(userId)
     try {
       const insertSetting = db.prepare('INSERT OR REPLACE INTO setting (name, content, type, knowledgeId, userId) VALUES (?, ?, ?, ?, ?)');
@@ -187,7 +187,7 @@
   }
 
   async function getTemplate(knowledgeId) {
-    const knowledgeIdFilter = Number(knowledgeId)
+    const knowledgeIdFilter = filterString(knowledgeId)
     const userIdFilter = Number(userId)
     const SettingRS = await new Promise((resolve, reject) => {
             const Templatename = "TEMPLATE"
@@ -660,7 +660,7 @@
   function filterString(input) {
     log("filterString input:", input)
     if(input) {
-      const sanitizedInput = input?.replace(/[^a-zA-Z0-9_\-@. ]/g, '');
+      const sanitizedInput = input.replace(/[^a-zA-Z0-9_\-@. ]/g, '');
       log("filterString output:", sanitizedInput)
       return input;
     }

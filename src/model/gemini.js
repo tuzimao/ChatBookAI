@@ -5,7 +5,6 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import * as crypto from 'crypto'
-import { OpenAI, ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import { PromptTemplate, ChatPromptTemplate } from "@langchain/core/prompts";
 import { LLMChain } from "langchain/chains";
 import { Calculator } from "langchain/tools/calculator";
@@ -13,6 +12,9 @@ import { BufferMemory } from "langchain/memory";
 import { ConversationChain } from "langchain/chains";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { ChatMessageHistory } from "langchain/stores/message/in_memory";
+
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { HarmBlockThreshold, HarmCategory } from "@google/generative-ai";
 
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { PineconeStore } from '@langchain/community/vectorstores/pinecone';
@@ -48,14 +50,14 @@ const PINECONE_NAME_SPACE = process.env.PINECONE_NAME_SPACE;
 
 let DataDir = null;
 let model = null;
-let ChatOpenAIModel = null
+let ChatGeminiModel = null
 let pinecone = null
 let getOpenAISettingData = null
 let knowledgeId = 0
 let userId = 1
 
 
-  async function initChatBookOpenAI(knowledgeId) {
+  async function initChatBookGemini(knowledgeId) {
     getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
     const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
@@ -65,7 +67,7 @@ let userId = 1
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
         process.env.OPENAI_API_KEY = OPENAI_API_KEY
       }
-      ChatOpenAIModel = new ChatOpenAI({ 
+      ChatGeminiModel = new ChatGemini({ 
         openAIApiKey: OPENAI_API_KEY, 
         temperature: Number(OPENAI_Temperature)
        });    
@@ -73,7 +75,7 @@ let userId = 1
     }
   }
 
-  async function initChatBookOpenAIStream(res, knowledgeId) {
+  async function initChatBookGeminiStream(res, knowledgeId) {
     getOpenAISettingData = await syncing.getOpenAISetting(knowledgeId);
     const OPENAI_API_BASE = getOpenAISettingData.OPENAI_API_BASE;
     const OPENAI_API_KEY = getOpenAISettingData.OPENAI_API_KEY;
@@ -83,7 +85,7 @@ let userId = 1
         process.env.OPENAI_BASE_URL = OPENAI_API_BASE
         process.env.OPENAI_API_KEY = OPENAI_API_KEY
       }
-      ChatOpenAIModel = new ChatOpenAI({ 
+      ChatGeminiModel = new ChatGemini({ 
         openAIApiKey: OPENAI_API_KEY, 
         temperature: Number(OPENAI_Temperature),
         streaming: true,
@@ -99,24 +101,38 @@ let userId = 1
     }
   }
 
-  async function chatChatOpenAI(res, knowledgeId, userId, question, history) {
-    await initChatBookOpenAIStream(res, 0)
-    const pastMessages = []
-    if(history && history.length > 0) {
-      history.map((Item) => {
-        pastMessages.push(new HumanMessage(Item[0]))
-        pastMessages.push(new AIMessage(Item[1]))
-      })
-    }
-    const memory = new BufferMemory({
-      chatHistory: new ChatMessageHistory(pastMessages),
+  async function chatChatGemini(res, knowledgeId, userId, question, history) {
+    process.env.GOOGLE_API_KEY = "AIzaSyAWOYV2IAY6QuYvzjTcEkLdRprXEkCjZvM"
+    const model = new ChatGoogleGenerativeAI({
+        modelName: "gemini-pro",
+        maxOutputTokens: 2048,
+        safetySettings: [
+          {
+            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+          },
+        ],
     });
-    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
-    await chain.call({ input: question});
+    const input2 = [
+        new HumanMessage({
+          content: [
+            {
+              type: "text",
+              text: question,
+            },
+          ],
+        }),
+      ];    
+    const res3 = await model.stream(input2);
+    for await (const chunk of res3) {
+        console.log(chunk.content);
+        res.write(chunk.content);
+    }    
+    res.end();
   }
 
-  async function chatKnowledgeOpenAI(res, KnowledgeId, userId, question, history) {
-    await initChatBookOpenAIStream(res, 0)
+  async function chatKnowledgeGemini(res, KnowledgeId, userId, question, history) {
+    await initChatBookGeminiStream(res, 0)
     // create chain
     const CONDENSE_TEMPLATE = await syncing.GetSetting("CONDENSE_TEMPLATE", KnowledgeId, userId);
     const QA_TEMPLATE       = await syncing.GetSetting("QA_TEMPLATE", KnowledgeId, userId);
@@ -203,7 +219,7 @@ let userId = 1
     // the chat history to allow effective vectorstore querying.
     const standaloneQuestionChain = RunnableSequence.from([
       condenseQuestionPrompt,
-      ChatOpenAIModel,
+      ChatGeminiModel,
       new StringOutputParser(),
     ]);
 
@@ -222,7 +238,7 @@ let userId = 1
         question: (input) => input.question,
       },
       answerPrompt,
-      ChatOpenAIModel,
+      ChatGeminiModel,
       new StringOutputParser(),
     ]);
 
@@ -244,24 +260,34 @@ let userId = 1
     return serializedDocs.join(separator);
   }
   
-  async function debug(res) {
-    const question = "your name?"
-    await initChatBookOpenAIStream(res, 0)
-
-    const pastMessages = [
-      new HumanMessage("what is Bitcoin?"),
-      new AIMessage("Nice to meet you, Jonas!"),
-    ];
-    
-    const memory = new BufferMemory({
-      chatHistory: new ChatMessageHistory(pastMessages),
+  async function debugGemeni(res) {
+    process.env.GOOGLE_API_KEY = "AIzaSyAWOYV2IAY6QuYvzjTcEkLdRprXEkCjZvM"
+    const model = new ChatGoogleGenerativeAI({
+        modelName: "gemini-pro",
+        maxOutputTokens: 2048,
+        safetySettings: [
+          {
+            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+          },
+        ],
     });
-
-    const chain = new ConversationChain({ llm: ChatOpenAIModel, memory: memory });
-
-    const res2 = await chain.call({ input: "What's the price?" });
-    console.log({ res2 });
-    
+    const input2 = [
+        new HumanMessage({
+          content: [
+            {
+              type: "text",
+              text: "什么是比特币?",
+            },
+          ],
+        }),
+      ];    
+    const res3 = await model.stream(input2);
+    for await (const chunk of res3) {
+        console.log(chunk.content);
+        res.write(chunk.content);
+    }    
+    res.end();
   }
 
   async function parseFiles() {
@@ -271,7 +297,7 @@ let userId = 1
       
       await Promise.all(getKnowledgePageData.map(async (KnowledgeItem)=>{
         const KnowledgeItemId = KnowledgeItem.id
-        await initChatBookOpenAI(KnowledgeItemId)
+        await initChatBookGemini(KnowledgeItemId)
         console.log("getOpenAISettingData", getOpenAISettingData, "KnowledgeItemId", KnowledgeItemId)
         console.log("process.env.OPENAI_BASE_URL", process.env.OPENAI_BASE_URL)
         enableDir(DataDir + '/uploadfiles/' + String(userId))
@@ -356,10 +382,10 @@ let userId = 1
 
 
   export default {
-    debug,
+    debugGemeni,
     parseFiles,
-    chatChatOpenAI,
-    chatKnowledgeOpenAI
+    chatChatGemini,
+    chatKnowledgeGemini
   };
 
 
