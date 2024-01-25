@@ -28,7 +28,8 @@ cron.schedule('*/3 * * * *', () => {
 });
 
 expressApp.get('/debug', async (req, res) => {
-  await baidu.debugBaiduWenxin(res);
+  const ChatMsg = await baidu.debugBaiduWenxin(res);
+  res.json(ChatMsg).end(); 
 });
 
 expressApp.get('/chat', async (req, res) => {
@@ -49,6 +50,22 @@ expressApp.post('/chat/chat/openai', async (req, res) => {
   res.end(); 
 });
 
+expressApp.post('/chat/chat/gemini', async (req, res) => {
+  const { knowledgeId, question, history } = req.body;
+  const userId = 1;
+  console.log("question", question)
+  await gemini.chatChatGemini(res, knowledgeId, Number(userId), question, history);
+  res.end(); 
+});
+
+expressApp.post('/chat/chat/baiduwenxin', async (req, res) => {
+  const { knowledgeId, question, history } = req.body;
+  const userId = 1;
+  console.log("question", question)
+  const ChatMsg = await baidu.chatChatBaiduWenxin(knowledgeId, userId, question, history);
+  res.json(ChatMsg).end();
+});
+
 expressApp.post('/chat/knowledge/openai', async (req, res) => {
   const { knowledgeId, question, history } = req.body;
   const userId = 1;
@@ -56,14 +73,6 @@ expressApp.post('/chat/knowledge/openai', async (req, res) => {
   const ChatMsg = await openai.chatKnowledgeOpenAI(res, Number(knowledgeId), Number(userId), question, history);
   console.log("ChatMsg", ChatMsg)
   //res.json(ChatMsg).end(); 
-});
-
-expressApp.post('/chat/chat/gemini', async (req, res) => {
-  const { knowledgeId, question, history } = req.body;
-  const userId = 1;
-  console.log("question", question)
-  await gemini.chatChatGemini(res, knowledgeId, Number(userId), question, history);
-  res.end(); 
 });
 
 expressApp.post('/chat/knowledge/gemini', async (req, res) => {

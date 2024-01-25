@@ -85,15 +85,15 @@ let userId = 1
     }
   }
 
-  async function chatChatBaiduWenxin(res, knowledgeId, userId, question, history) {
-    await initChatBookBaiduWenxinStream(knowledgeId)
+  async function chatChatBaiduWenxin(knowledgeId, userId, question, history) {
+    await initChatBookBaiduWenxinStream(knowledgeId);
     const input2 = [new HumanMessage(question)];
     const response = await ChatBaiduWenxinModel.call(input2);
-    console.log("response", response.content)
+    console.log("response", response.content);
     const insertChatLog = syncing.db.prepare('INSERT OR REPLACE INTO chatlog (knowledgeId, send, Received, userId, timestamp, source, history) VALUES (?,?,?,?,?,?,?)');
     insertChatLog.run(knowledgeId, question, response.content, userId, Date.now(), JSON.stringify([]), JSON.stringify(history));
     insertChatLog.finalize();
-    res.end();
+    return response.content;
   }
 
   async function chatKnowledgeBaiduWenxin(res, knowledgeId, userId, question, history) {
@@ -226,7 +226,7 @@ let userId = 1
   }
   
   async function debugBaiduWenxin(res) {
-    chatChatBaiduWenxin(res, "BaiduWenxin", 1, 'what is bitcoin?', [])
+    return chatChatBaiduWenxin(res, "BaiduWenxin", 1, 'what is bitcoin?', [])
   }
 
   async function log(Action1, Action2='', Action3='', Action4='', Action5='', Action6='', Action7='', Action8='', Action9='', Action10='') {
