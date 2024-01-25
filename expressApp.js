@@ -3,13 +3,13 @@ import express from 'express';
 import syncing from './src/syncing.js';
 import openai from './src/model/openai.js';
 import gemini from './src/model/gemini.js';
+import baidu from './src/model/baidu.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import agentRoutes from './src/router/agent.js';
 import cron from 'node-cron';
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,8 +28,7 @@ cron.schedule('*/3 * * * *', () => {
 });
 
 expressApp.get('/debug', async (req, res) => {
-  await gemini.debugGemeni(res);
-  res.end(); 
+  await baidu.debugBaiduWenxin(res);
 });
 
 expressApp.get('/chat', async (req, res) => {
